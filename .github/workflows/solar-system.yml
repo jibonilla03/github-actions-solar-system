@@ -86,6 +86,8 @@ jobs:
       runs-on: ubuntu-latest
       environment:
         name: development
+      outputs:
+        INGRESS_IP: $${{ steps.get-ingress-ip.outputs.INGRESS_IP }}
       steps:
         - uses: actions/checkout@v4
         - uses: azure/setup-kubectl@v4
@@ -96,8 +98,9 @@ jobs:
             method: kubeconfig
             kubeconfig: '${{ secrets.KUBECONFIG }}'
         - run: kubectl version -o yaml
-        - run: >
-            echo "INGRESS_IP=$(kubectl -n ingress-nginx get services ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}')" >> $GITHUB_ENV
+        - id: get-ingress-ip
+          run: >
+            echo "INGRESS_IP=$(kubectl -n ingress-nginx get services ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}')" >> $GITHUB_OUTPUT
         - uses: cschleiden/replace-tokens@v1
           with:
             tokenPrefix: '_{_'
@@ -111,3 +114,9 @@ jobs:
               }}
             INGRESS_IP: '${{ env.INGRESS_IP }}'
         - run: cat kubernetes/development/*.yaml
+
+    call-integration-test:
+      uses: ./.github/workflow/reusable-workflow.yml
+      needs: dev-deploy
+      with: 
+        ingress-url: '${{ needs.dev-deploy.outputs.INGRESS_IP }}'
